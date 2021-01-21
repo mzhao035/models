@@ -56,7 +56,7 @@ def preprocess_image_and_label(image,
     ignore_label: The label value which will be ignored for training and
       evaluation.
     is_training: If the preprocessing is used for training or not.
-    model_variant: Model variant (string) for choosing how to mean-subtract the
+    model_variant: Model variant (string) for choosing how to mean-subtract the #预处理图片时，model_variant作用是选择减去的均值
       images. See feature_extractor.network_map for supported model variants.
 
   Returns:
@@ -113,7 +113,7 @@ def preprocess_image_and_label(image,
 
   # Pad image with mean pixel value.
   mean_pixel = tf.reshape(
-      feature_extractor.mean_pixel(model_variant), [1, 1, 3])
+      feature_extractor.mean_pixel(model_variant), [1, 1, 3])                                             #model_variant
   processed_image = preprocess_utils.pad_to_bounding_box(
       processed_image, 0, 0, target_height, target_width, mean_pixel)
 

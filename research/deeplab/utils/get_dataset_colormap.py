@@ -31,6 +31,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 import numpy as np
+import pandas as pd
 from six.moves import range
 
 # Dataset names.
@@ -315,21 +316,30 @@ def create_mapillary_vistas_label_colormap():
 
 
 def create_pascal_label_colormap():
-  """Creates a label colormap used in PASCAL VOC segmentation benchmark.
+  dfcolor = pd.read_csv("/home/zhaomin/anaconda3/envs/tf_1.15_py_3.6/lib/python3.6/site-packages/tensorflow_core/models/research/deeplab/utils/Color_Map.csv")
 
-  Returns:
-    A colormap for visualizing segmentation results.
-  """
-  colormap = np.zeros((_DATASET_MAX_ENTRIES[_PASCAL], 3), dtype=int)
-  ind = np.arange(_DATASET_MAX_ENTRIES[_PASCAL], dtype=int)
-
-  for shift in reversed(list(range(8))):
-    for channel in range(3):
-      colormap[:, channel] |= bit_get(ind, channel) << shift
-    ind >>= 3
-
-  return colormap
-
+  class_color = dfcolor["Color"].tolist()
+  color_map = []
+#  class_index_list = [30,48,51,54,70]
+  for index in range(len(class_color)):
+#      if index in class_index_list:
+#        scalar = list(map(int, class_color[index].split(',')))
+#        if index==54:
+#            scalar[0]=0
+#            scalar[1]=255
+#            scalar[2]=0
+#        if index==70:
+#            scalar[0]=255
+#            scalar[1]=0
+#            scalar[2]=0
+#      else:
+#        scalar = list(map(int, class_color[index].split(',')))
+#        scalar[0] = scalar[0]/2
+#        scalar[1] = scalar[1]/2
+#        scalar[2] = scalar[2]/2
+      scalar = list(map(int, class_color[index].split(',')))		
+      color_map.append(scalar)
+  return np.array(color_map)
 
 def get_ade20k_name():
   return _ADE20K

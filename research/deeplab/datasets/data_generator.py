@@ -99,10 +99,176 @@ _ADE20K_INFORMATION = DatasetDescriptor(
     ignore_label=0,
 )
 
+_TRIFO_INFORMATION = DatasetDescriptor(
+    splits_to_sizes={
+        'train': 78,  # num of samples in images/training
+        'val': 12,  # num of samples in images/validation
+    },
+    num_classes=71,
+    ignore_label=0,
+)
+_TRIFO_INFORMATION_0519_002 = DatasetDescriptor(
+        splits_to_sizes={
+            'train':156,
+            'val':44,
+        },
+        num_classes=71,
+        ignore_label=0,
+)
+_TRIFO_INFORMATION_ALL = DatasetDescriptor(
+        splits_to_sizes={
+            'train':815,
+            'val':60,
+        },
+        num_classes=71,
+        ignore_label=0,
+)
+
+_TRIFO_INFORMATION_SHOE_79_VAL_9 = DatasetDescriptor(
+        splits_to_sizes={
+            'train': 70,
+            'val': 8,
+        },
+        num_classes=71,
+        ignore_label=0,
+)
+
+_TRIFO_INFORMATION_0616 = DatasetDescriptor(
+        splits_to_sizes={
+            'train': 815,
+            'val': 60,
+        },
+        num_classes=71,
+        ignore_label=0,
+)
+_TRIFO_INFORMATION_WIRE_0624 = DatasetDescriptor(
+        splits_to_sizes={
+            'train': 125,
+            'val': 0,
+        },
+        num_classes=71,
+        ignore_label=0,
+)
+_TRIFO_INFORMATION_WIRE_0706_210_val = DatasetDescriptor(
+        splits_to_sizes={
+            'train': 0,
+            'val': 210,
+        },
+        num_classes=71,
+        ignore_label=0,
+)
+_TRIFO_INFORMATION_WIRE_0706_105_val = DatasetDescriptor(
+        splits_to_sizes={
+            'train': 0,
+            'val': 105,
+        },
+        num_classes=71,
+        ignore_label=0,
+)
+_TRIFO_INFORMATION_2000_TRAINDATA = DatasetDescriptor(
+        splits_to_sizes={
+            'train':1902,
+            'val':98,
+        },
+        num_classes=71,
+        ignore_label=0,
+)
+_TRIFO_INFORMATION_TRIFO_DATASET_V3 = DatasetDescriptor(
+        splits_to_sizes={
+            'train':2144,
+            'val':133,
+        },
+        num_classes=71,
+        ignore_label=0,
+)
+_TRIFO_INFORMATION_TRIFO_DATASET_V3_HALF = DatasetDescriptor(
+        splits_to_sizes={
+            'train':0,
+            'val':133,
+        },
+        num_classes=71,
+        ignore_label=0,
+)
+_TRIFO_INFORMATION_TRIFO_DATASET_V4_HALF = DatasetDescriptor(
+        splits_to_sizes={
+            'train':2090,
+            'val':187,
+        },
+        num_classes=71,
+        ignore_label=0,
+)
+_TRIFO_INFORMATION_TRIFO_DATASET_V4 = DatasetDescriptor(
+        splits_to_sizes={
+            'train':2090,
+            'val':187,
+        },
+        num_classes=71,
+        ignore_label=0,
+)
+_TRIFO_INFORMATION_TRIFO_TEST = DatasetDescriptor(
+        splits_to_sizes={
+            'train':0,
+            'val':187,
+        },
+        num_classes=71,
+        ignore_label=0,
+)
+_TRIFO_INFORMATION_DATASET_V5_HALF_16_CLASSES = DatasetDescriptor(
+        splits_to_sizes={
+            'train':0,
+            'val':498,
+        },
+        num_classes=16,
+        ignore_label=0,
+)
+_TRIFO_INFORMATION_DATASET_V6_HALF_16_CLASSES = DatasetDescriptor(
+        splits_to_sizes={
+            'train':0,
+            'val':339,
+        },
+        num_classes=16,
+        ignore_label=0,
+)
+_TRIFO_INFORMATION_DATASET_Ou8Ji0 = DatasetDescriptor(
+        splits_to_sizes={
+            'train':0,
+            'val':339,
+        },
+        num_classes=16,
+        ignore_label=255,
+)
+_TRIFO_INFORMATION_DATASET_wqSfkp = DatasetDescriptor(
+        splits_to_sizes={
+            'train':3847,
+            'val':606,
+        },
+        num_classes=16,
+        ignore_label=255,
+)
+
+
 _DATASETS_INFORMATION = {
     'cityscapes': _CITYSCAPES_INFORMATION,
     'pascal_voc_seg': _PASCAL_VOC_SEG_INFORMATION,
     'ade20k': _ADE20K_INFORMATION,
+    'trifo_0518_001': _TRIFO_INFORMATION,
+    'trifo_0519_002': _TRIFO_INFORMATION_0519_002,
+    'trifo_all': _TRIFO_INFORMATION_ALL,
+    'trifo_shoe_79_val_9': _TRIFO_INFORMATION_SHOE_79_VAL_9,
+    'trifo_0616': _TRIFO_INFORMATION_0616,
+    'trifo_wire_0624': _TRIFO_INFORMATION_WIRE_0624,
+	'trifo_wire_210_0706_val': _TRIFO_INFORMATION_WIRE_0706_210_val,
+	'trifo_wire_105_0706_val': _TRIFO_INFORMATION_WIRE_0706_105_val,
+    'trifo_2000_traindata': _TRIFO_INFORMATION_2000_TRAINDATA,
+	'trifo_dataset_v3': _TRIFO_INFORMATION_TRIFO_DATASET_V3,
+    'dataset_v4_half': _TRIFO_INFORMATION_TRIFO_DATASET_V4_HALF,
+	'trifo_dataset_v4': _TRIFO_INFORMATION_TRIFO_DATASET_V4,
+	'trifo_dataset_v3_half': _TRIFO_INFORMATION_TRIFO_DATASET_V3_HALF,
+	'trifo_test': _TRIFO_INFORMATION_TRIFO_TEST,
+	'dataset_v5_half_16_classes': _TRIFO_INFORMATION_DATASET_V5_HALF_16_CLASSES,
+	'dataset_v6_half_16_classes': _TRIFO_INFORMATION_DATASET_V6_HALF_16_CLASSES,
+    'dataset_Ou8Ji0': _TRIFO_INFORMATION_DATASET_Ou8Ji0,
+    'dataset_wqSfkp' : _TRIFO_INFORMATION_DATASET_wqSfkp
 }
 
 # Default file pattern of TFRecord of TensorFlow Example.
@@ -313,6 +479,8 @@ class Dataset(object):
 
     return sample
 
+
+  # 读取解析数据集并且获取一个batch的数据
   def get_one_shot_iterator(self):
     """Gets an iterator that iterates across the dataset once.
 

@@ -31,18 +31,19 @@ cd ..
 
 # Update PYTHONPATH.
 export PYTHONPATH=$PYTHONPATH:`pwd`:`pwd`/slim
+export PYTHONPATH=$PYTHONPATH:`pwd`:`pwd`/slim
 
 # Set up the working environment.
 CURRENT_DIR=$(pwd)
 WORK_DIR="${CURRENT_DIR}/deeplab"
 
 # Run model_test first to make sure the PYTHONPATH is correctly set.
-python "${WORK_DIR}"/model_test.py -v
+#python "${WORK_DIR}"/model_test.py 
 
 # Go to datasets folder and download PASCAL VOC 2012 segmentation dataset.
 DATASET_DIR="datasets"
 cd "${WORK_DIR}/${DATASET_DIR}"
-sh download_and_convert_voc2012.sh
+#sh download_and_convert_voc2012.sh
 
 # Go back to original directory.
 cd "${CURRENT_DIR}"
@@ -62,20 +63,20 @@ mkdir -p "${VIS_LOGDIR}"
 mkdir -p "${EXPORT_DIR}"
 
 # Copy locally the trained checkpoint as the initial checkpoint.
-TF_INIT_ROOT="http://download.tensorflow.org/models"
-TF_INIT_CKPT="deeplabv3_pascal_train_aug_2018_01_04.tar.gz"
+#TF_INIT_ROOT="http://download.tensorflow.org/models"
+#TF_INIT_CKPT="deeplabv3_pascal_train_aug_2018_01_04.tar.gz"
 cd "${INIT_FOLDER}"
-wget -nd -c "${TF_INIT_ROOT}/${TF_INIT_CKPT}"
-tar -xf "${TF_INIT_CKPT}"
+#wget -nd -c "${TF_INIT_ROOT}/${TF_INIT_CKPT}"
+#tar -xf "${TF_INIT_CKPT}"
 cd "${CURRENT_DIR}"
 
-PASCAL_DATASET="${WORK_DIR}/${DATASET_DIR}/${PASCAL_FOLDER}/tfrecord"
+#PASCAL_DATASET="${WORK_DIR}/${DATASET_DIR}/${PASCAL_FOLDER}/tfrecord"
 
 # Train 10 iterations.
 NUM_ITERATIONS=10
 python "${WORK_DIR}"/train.py \
   --logtostderr \
-  --train_split="trainval" \
+ --train_split="trainval" \
   --model_variant="xception_65" \
   --atrous_rates=6 \
   --atrous_rates=12 \
@@ -83,30 +84,30 @@ python "${WORK_DIR}"/train.py \
   --output_stride=16 \
   --decoder_output_stride=4 \
   --train_crop_size="513,513" \
-  --train_batch_size=4 \
+  --train_batch_size=2 \
   --training_number_of_steps="${NUM_ITERATIONS}" \
   --fine_tune_batch_norm=true \
   --tf_initial_checkpoint="${INIT_FOLDER}/deeplabv3_pascal_train_aug/model.ckpt" \
   --train_logdir="${TRAIN_LOGDIR}" \
   --dataset_dir="${PASCAL_DATASET}"
 
-# Run evaluation. This performs eval over the full val split (1449 images) and
+# Run evaluation. This performs eval over the full val split (1449 images) and          #evaluation,为什么在我的笔记本上不能执行？？？
 # will take a while.
 # Using the provided checkpoint, one should expect mIOU=82.20%.
-python "${WORK_DIR}"/eval.py \
-  --logtostderr \
-  --eval_split="val" \
-  --model_variant="xception_65" \
-  --atrous_rates=6 \
-  --atrous_rates=12 \
-  --atrous_rates=18 \
-  --output_stride=16 \
-  --decoder_output_stride=4 \
-  --eval_crop_size="513,513" \
-  --checkpoint_dir="${TRAIN_LOGDIR}" \
-  --eval_logdir="${EVAL_LOGDIR}" \
-  --dataset_dir="${PASCAL_DATASET}" \
-  --max_number_of_evaluations=1
+#python "${WORK_DIR}"/eval.py \
+#  --logtostderr \
+#  --eval_split="val" \
+#  --model_variant="xception_65" \
+#  --atrous_rates=6 \
+#  --atrous_rates=12 \
+#  --atrous_rates=18 \
+#  --output_stride=16 \
+#  --decoder_output_stride=4 \
+#  --eval_crop_size="513,513" \
+#  --checkpoint_dir="${TRAIN_LOGDIR}" \
+#  --eval_logdir="${EVAL_LOGDIR}" \
+#  --dataset_dir="${PASCAL_DATASET}" \
+#  --max_number_of_evaluations=1
 
 # Visualize the results.
 python "${WORK_DIR}"/vis.py \

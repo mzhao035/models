@@ -162,7 +162,7 @@ def predict_labels_multi_scale(images,
     # Compute average prediction across different scales and flipped images.
     predictions = tf.reduce_mean(tf.concat(predictions, 4), axis=4)
     outputs_to_predictions[output] = tf.argmax(predictions, 3)
-    outputs_to_predictions[output + PROB_SUFFIX] = tf.nn.softmax(predictions)
+    outputs_to_predictions[output + PROB_SUFFIX] = tf.nn.softmax(predictions, 3)
 
   return outputs_to_predictions
 
@@ -183,7 +183,7 @@ def predict_labels(images, model_options, image_pyramid=None):
   outputs_to_scales_to_logits = multi_scale_logits(
       images,
       model_options=model_options,
-      image_pyramid=image_pyramid,
+      image_pyramid=image_pyramid,  # None
       is_training=False,
       fine_tune_batch_norm=False)
 
@@ -199,8 +199,9 @@ def predict_labels(images, model_options, image_pyramid=None):
       logits = _resize_bilinear(logits,
                                 tf.shape(images)[1:3],
                                 scales_to_logits[MERGED_LOGITS_SCOPE].dtype)
-      predictions[output] = tf.argmax(logits, 3)
-      predictions[output + PROB_SUFFIX] = tf.nn.softmax(logits)
+      # predictions[output] = tf.argmax(logits, 3)
+      predictions[output] = tf.argmax(tf.nn.softmax(logits), 3)
+      predictions[output + PROB_SUFFIX] = tf.nn.softmax(logits, 3)
     else:
       argmax_results = tf.argmax(logits, 3)
       argmax_results = tf.image.resize_nearest_neighbor(
@@ -208,9 +209,10 @@ def predict_labels(images, model_options, image_pyramid=None):
           tf.shape(images)[1:3],
           align_corners=True,
           name='resize_prediction')
-      predictions[output] = tf.squeeze(argmax_results, 3)
+      #predictions[output] = tf.squeeze(argmax_results, 3)
+      predictions[output] = tf.argmax(tf.nn.softmax(logits), 3)
       predictions[output + PROB_SUFFIX] = tf.image.resize_bilinear(
-          tf.nn.softmax(logits),
+          tf.nn.softmax(logits, 3),
           tf.shape(images)[1:3],
           align_corners=True,
           name='resize_prob')
@@ -219,14 +221,14 @@ def predict_labels(images, model_options, image_pyramid=None):
 
 def multi_scale_logits(images,
                        model_options,
-                       image_pyramid,
+                       image_pyramid,  # for mobinetv2， None
                        weight_decay=0.0001,
-                       is_training=False,
+                       is_training=False,   # true for training and false for evalutation
                        fine_tune_batch_norm=False,
                        nas_training_hyper_parameters=None):
-  """Gets the logits for multi-scale inputs.
+  """Gets the logits for multi-scale inputs.                            对不同尺度的输入获取相应的logits
 
-  The returned logits are all downsampled (due to max-pooling layers)
+  The returned logits are all downsampled (due to max-pooling layers)   返回的logits是下采样过的，因为有最大值池化层
   for both training and evaluation.
 
   Args:
@@ -244,6 +246,8 @@ def multi_scale_logits(images,
         probability calculation.
 
   Returns:
+    输出的是双层map：首先是不同输出类型（output_type，比如“语义”）到map的映射，
+    每个map是一个映射，就是logits的名字（带尺度信息，比如'merged_logits', 'logits_1.00' and 'logits_1.50'）与logits的对应
     outputs_to_scales_to_logits: A map of maps from output_type (e.g.,
       semantic prediction) to a dictionary of multi-scale logits names to
       logits. For each output_type, the dictionary has keys which
@@ -257,41 +261,57 @@ def multi_scale_logits(images,
       crop_size information.
   """
   # Setup default values.
+
+  # image_pyramid 是一个尺度列表，如果image_pyramid参数一开始是个None，这里列表中只有一个数，就是1.0
   if not image_pyramid:
     image_pyramid = [1.0]
+
+  # 更新crop_height crop_width,更新原则：有指定crop_size(train/eval）就等于crop size 如果没有就是图像的height width
   crop_height = (
       model_options.crop_size[0]
       if model_options.crop_size else tf.shape(images)[1])
   crop_width = (
       model_options.crop_size[1]
       if model_options.crop_size else tf.shape(images)[2])
-  if model_options.image_pooling_crop_size:
+  # 不知道干嘛用
+  #default None
+  if model_options.image_pooling_crop_size:                               
     image_pooling_crop_height = model_options.image_pooling_crop_size[0]
     image_pooling_crop_width = model_options.image_pooling_crop_size[1]
 
   # Compute the height, width for the output logits.
-  if model_options.decoder_output_stride:
+  #For `mobilenet_v2`, use decoder_output_stride = None.因为mobilenet没有用deeplabv3+设计的decoder
+  if model_options.decoder_output_stride:               
+    # 选列表中的最小值
     logits_output_stride = min(model_options.decoder_output_stride)
   else:
-    logits_output_stride = model_options.output_stride
+    # mobilenet_v2
+    logits_output_stride = model_options.output_stride  
 
-  logits_height = scale_dimension(
+  # 由最大一层的金字塔尺寸以及output_stride决定最后的logits尺寸（目测也是最后的融合尺寸）
+  logits_height = scale_dimension(   # （a-1）* scale + 1
       crop_height,
-      max(1.0, max(image_pyramid)) / logits_output_stride)
+      max(1.0, max(image_pyramid)) / logits_output_stride)  
   logits_width = scale_dimension(
       crop_width,
       max(1.0, max(image_pyramid)) / logits_output_stride)
 
   # Compute the logits for each scale in the image pyramid.
+  #建立map，先确定第一层map的key：如 “semantic”
   outputs_to_scales_to_logits = {
       k: {}
       for k in model_options.outputs_to_num_classes
   }
-
+  
+  #获取图像通道数
   num_channels = images.get_shape().as_list()[-1]
-
+  
+  #对每个不同的金字塔scale来计算logits
   for image_scale in image_pyramid:
+
+    #根据是否需要多尺度处理来更新图像大小和crop size大小
     if image_scale != 1.0:
+      #根据scale参数，放缩（resize）图像
       scaled_height = scale_dimension(crop_height, image_scale)
       scaled_width = scale_dimension(crop_width, image_scale)
       scaled_crop_size = [scaled_height, scaled_width]
@@ -300,20 +320,25 @@ def multi_scale_logits(images,
         scaled_images.set_shape(
             [None, scaled_height, scaled_width, num_channels])
       # Adjust image_pooling_crop_size accordingly.
+      #如果image_pooling_crop_size参数不为None，对其进行相同的缩放
       scaled_image_pooling_crop_size = None
       if model_options.image_pooling_crop_size:
         scaled_image_pooling_crop_size = [
             scale_dimension(image_pooling_crop_height, image_scale),
             scale_dimension(image_pooling_crop_width, image_scale)]
-    else:
+    else:# 图像金子塔只有一个1.0尺寸时，不用做缩放
       scaled_crop_size = model_options.crop_size
       scaled_images = images
       scaled_image_pooling_crop_size = model_options.image_pooling_crop_size
 
+
+
+    #在model_options更新crop size 和 image_pooling_crop_size，并赋值给新的变量updated_options
     updated_options = model_options._replace(
         crop_size=scaled_crop_size,
-        image_pooling_crop_size=scaled_image_pooling_crop_size)
-    outputs_to_logits = _get_logits(
+        image_pooling_crop_size=scaled_image_pooling_crop_size)  #scaled_image_pooling_crop_size ： None
+    #调用_get_logits函数
+    outputs_to_logits = _get_logits(                                          # FUNC：  _get_logits
         scaled_images,
         updated_options,
         weight_decay=weight_decay,
@@ -323,7 +348,9 @@ def multi_scale_logits(images,
         nas_training_hyper_parameters=nas_training_hyper_parameters)
 
     # Resize the logits to have the same dimension before merging.
-    for output in sorted(outputs_to_logits):
+    #对logits输出做resize，统一大小，统一到最大层的大小
+    # 对于mobilenet backbone来说，就是resize到output_stride分之一就好，比如1/16
+    for output in sorted(outputs_to_logits):                        #这里的output 就是“semantic”
       outputs_to_logits[output] = _resize_bilinear(
           outputs_to_logits[output], [logits_height, logits_width],
           outputs_to_logits[output].dtype)
@@ -331,16 +358,20 @@ def multi_scale_logits(images,
     # Return when only one input scale.
     if len(image_pyramid) == 1:
       for output in sorted(model_options.outputs_to_num_classes):
+        #MERGED_LOGITS_SCOPE = 'merged_logits'
+        #因为只有一个尺度，直接输出融合以后的logits
         outputs_to_scales_to_logits[output][
-            MERGED_LOGITS_SCOPE] = outputs_to_logits[output]
+            MERGED_LOGITS_SCOPE] = outputs_to_logits[output]    
       return outputs_to_scales_to_logits
 
     # Save logits to the output map.
+    #按照尺度大小给不同尺度的logits取名字，然后按照名字存好
     for output in sorted(model_options.outputs_to_num_classes):
       outputs_to_scales_to_logits[output][
           'logits_%.2f' % image_scale] = outputs_to_logits[output]
-
+  
   # Merge the logits from all the multi-scale inputs.
+  # 开始融合各层的logits结果
   for output in sorted(model_options.outputs_to_num_classes):
     # Concatenate the multi-scale logits for each output type.
     all_logits = [
@@ -348,6 +379,7 @@ def multi_scale_logits(images,
         for logits in outputs_to_scales_to_logits[output].values()
     ]
     all_logits = tf.concat(all_logits, 4)
+    #融合策略是max（default） or mean
     merge_fn = (
         tf.reduce_max
         if model_options.merge_method == 'max' else tf.reduce_mean)
@@ -381,6 +413,7 @@ def extract_features(images,
         probability calculation.
 
   Returns:
+  # feature_height/feature_width 由图像的 height/width 和 output_stride 共同决定
     concat_logits: A tensor of size [batch, feature_height, feature_width,
       feature_channels], where feature_height/feature_width are determined by
       the images height/width and output_stride.
@@ -424,6 +457,10 @@ def extract_features(images,
           fine_tune_batch_norm=fine_tune_batch_norm)
       return concat_logits, end_points
     else:
+
+      # 因为aspp_with_batch_norm ： true，所以执行这里
+
+
       # The following codes employ the DeepLabv3 ASPP module. Note that we
       # could express the ASPP module as one particular dense prediction
       # cell architecture. We do not do so but leave the following codes
@@ -502,7 +539,7 @@ def extract_features(images,
               resize_width = None
             image_feature.set_shape([None, resize_height, resize_width, depth])
             if not model_options.aspp_with_squeeze_and_excitation:
-              branch_logits.append(image_feature)
+              branch_logits.append(image_feature)  # 使用image_feature
 
           # Employ a 1x1 convolution.
           branch_logits.append(slim.conv2d(features, depth, 1,
@@ -526,7 +563,10 @@ def extract_features(images,
 
           # Merge branch logits.
           concat_logits = tf.concat(branch_logits, 3)
-          if model_options.aspp_with_concat_projection:
+
+
+          #要做的
+          if model_options.aspp_with_concat_projection:   # true
             concat_logits = slim.conv2d(
                 concat_logits, depth, 1, scope=CONCAT_PROJECTION_SCOPE)
             concat_logits = slim.dropout(
@@ -534,8 +574,10 @@ def extract_features(images,
                 keep_prob=0.9,
                 is_training=is_training,
                 scope=CONCAT_PROJECTION_SCOPE + '_dropout')
+
+          #不做
           if (model_options.add_image_level_feature and
-              model_options.aspp_with_squeeze_and_excitation):
+              model_options.aspp_with_squeeze_and_excitation):   # false
             concat_logits *= image_feature
 
           return concat_logits, end_points
@@ -549,10 +591,11 @@ def _get_logits(images,
                 fine_tune_batch_norm=False,
                 nas_training_hyper_parameters=None):
   """Gets the logits by atrous/image spatial pyramid pooling.
+  # 通过空洞或者图像空间金字塔池化方法获得logits？？？？？？
 
   Args:
     images: A tensor of size [batch, height, width, channels].
-    model_options: A ModelOptions instance to configure models.
+    model_options: A ModelOptions instance to configure models.                    #术语学习：configure models
     weight_decay: The weight decay for model variables.
     reuse: Reuse the model variables or not.
     is_training: Is training or not.
@@ -567,7 +610,8 @@ def _get_logits(images,
   Returns:
     outputs_to_logits: A map from output_type to logits.
   """
-  features, end_points = extract_features(
+  #提取特征
+  features, end_points = extract_features(                     #  FUNC： extract_features
       images,
       model_options,
       weight_decay=weight_decay,
@@ -575,11 +619,15 @@ def _get_logits(images,
       is_training=is_training,
       fine_tune_batch_norm=fine_tune_batch_norm,
       nas_training_hyper_parameters=nas_training_hyper_parameters)
-
+  
+  # mobilenetv2 没有这个
+  #如果指定了decoder_output_stride
   if model_options.decoder_output_stride:
     crop_size = model_options.crop_size
     if crop_size is None:
       crop_size = [tf.shape(images)[1], tf.shape(images)[2]]
+    #使用decoder 所以要用decoder对提取的特征进行refine
+    #这块暂时不看0602
     features = refine_by_decoder(
         features,
         end_points,
@@ -596,21 +644,30 @@ def _get_logits(images,
         fine_tune_batch_norm=fine_tune_batch_norm,
         use_bounded_activation=model_options.use_bounded_activation)
 
+
+
+  #无论有没有decoder
   outputs_to_logits = {}
+  # outputs_to_num_classes['semantic'] = 21
   for output in sorted(model_options.outputs_to_num_classes):
+    #flags.DEFINE_boolean('decoder_output_is_logits', False,'Use decoder output as logits or not.')
+    # 默认不使用decoder的输出作为logits？？？？
     if model_options.decoder_output_is_logits:
       outputs_to_logits[output] = tf.identity(features,
                                               name=output)
-    else:
-      outputs_to_logits[output] = get_branch_logits(
+    else:# 默认不使用decoder的输出作为logits，所以看这里
+      # 所以这块在干嘛？？？？
+
+      # 由于atrous_rates is None，这里get_branch_logits就是一个1×1卷积
+      outputs_to_logits[output] = get_branch_logits(                    # FUNC： get_branch_logits
           features,
           model_options.outputs_to_num_classes[output],
-          model_options.atrous_rates,
-          aspp_with_batch_norm=model_options.aspp_with_batch_norm,
-          kernel_size=model_options.logits_kernel_size,
+          model_options.atrous_rates,   #None
+          aspp_with_batch_norm=model_options.aspp_with_batch_norm,  #True
+          kernel_size=model_options.logits_kernel_size,  # 1
           weight_decay=weight_decay,
           reuse=reuse,
-          scope_suffix=output)
+          scope_suffix=output)   #“semantic”
 
   return outputs_to_logits
 
@@ -678,7 +735,8 @@ def refine_by_decoder(features,
     # When using sum merge, the projected filters must be equal to decoder
     # filters.
     projected_filters = decoder_filters
-  if decoder_output_is_logits:
+
+  if decoder_output_is_logits:  # 默认false
     # Overwrite the setting when decoder output is logits.
     activation_fn = None
     normalizer_fn = None
@@ -703,7 +761,7 @@ def refine_by_decoder(features,
         decoder_features = features
         decoder_stage = 0
         scope_suffix = ''
-        for output_stride in decoder_output_stride:
+        for output_stride in decoder_output_stride:  # atrous_rates = [6, 12, 18] (output stride 16) and decoder_output_stride = 4.
           feature_list = feature_extractor.networks_to_feature_maps[
               model_variant][
                   feature_extractor.DECODER_END_POINTS][output_stride]
@@ -847,15 +905,15 @@ def _decoder_with_concat_merge(decoder_features_list,
         scope='decoder_conv'+scope_suffix)
   return decoder_features
 
-
+# 暂时不看，mark
 def get_branch_logits(features,
                       num_classes,
                       atrous_rates=None,
-                      aspp_with_batch_norm=False,
+                      aspp_with_batch_norm=False,    # 默认从外面给的参数是True   aspp_with_batch_norm=model_options.aspp_with_batch_norm,  #True
                       kernel_size=1,
                       weight_decay=0.0001,
                       reuse=None,
-                      scope_suffix=''):
+                      scope_suffix=''):   #“semantic”
   """Gets the logits from each model's branch.
 
   The underlying model is branched out in the last layer when atrous
@@ -865,7 +923,8 @@ def get_branch_logits(features,
   Args:
     features: A float tensor of shape [batch, height, width, channels].
     num_classes: Number of classes to predict.
-    atrous_rates: A list of atrous convolution rates for last layer.
+    #最后一层使用的空洞卷积率列表（atroulist of atrous convolution rates）
+    atrous_rates: A list of atroulist of atrous convolution rates for last layer.  
     aspp_with_batch_norm: Use batch normalization layers for ASPP.
     kernel_size: Kernel size for convolution.
     weight_decay: Weight decay for the model variables.
@@ -880,6 +939,9 @@ def get_branch_logits(features,
   """
   # When using batch normalization with ASPP, ASPP has been applied before
   # in extract_features, and thus we simply apply 1x1 convolution here.
+
+
+  # 对于我们现在的mobilenetv2的模型来说，就是atrous_rates = [1]
   if aspp_with_batch_norm or atrous_rates is None:
     if kernel_size != 1:
       raise ValueError('Kernel size must be 1 when atrous_rates is None or '

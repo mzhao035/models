@@ -101,8 +101,10 @@ def get_label_resize_method(label):
     ValueError: If label is neither floating nor integer.
   """
   if label.dtype.is_floating:
+    print("\n\n\n\nlabel dtype is floating")
     return tf.image.ResizeMethod.BILINEAR
   elif label.dtype.is_integer:
+    print("\n\n\n\nlabel dtype is integer")
     return tf.image.ResizeMethod.NEAREST_NEIGHBOR
   else:
     raise ValueError('Label type must be either floating or integer.')

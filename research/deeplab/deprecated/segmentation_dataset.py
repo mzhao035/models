@@ -110,11 +110,21 @@ _ADE20K_INFORMATION = DatasetDescriptor(
     ignore_label=0,
 )
 
+_TRIFO_SHOE_79_VAL_9_INFORMATION = DatasetDescriptor(
+    splits_to_sizes={
+        'train': 70,  # num of samples in images/training
+        'val': 9,  # num of samples in images/validation
+    },
+    num_classes=8,
+    ignore_label=0,
+)
+
 
 _DATASETS_INFORMATION = {
     'cityscapes': _CITYSCAPES_INFORMATION,
     'pascal_voc_seg': _PASCAL_VOC_SEG_INFORMATION,
     'ade20k': _ADE20K_INFORMATION,
+    'trifo_shoe_79_val_9':_TRIFO_SHOE_79_VAL_9_INFORMATION,
 }
 
 # Default file pattern of TFRecord of TensorFlow Example.

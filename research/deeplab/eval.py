@@ -21,6 +21,7 @@ See model.py for more details and usage.
 import numpy as np
 import six
 import tensorflow as tf
+import os
 from tensorflow.contrib import metrics as contrib_metrics
 from tensorflow.contrib import quantize as contrib_quantize
 from tensorflow.contrib import tfprof as contrib_tfprof
@@ -28,6 +29,8 @@ from tensorflow.contrib import training as contrib_training
 from deeplab import common
 from deeplab import model
 from deeplab.datasets import data_generator
+from tensorflow.python.training import monitored_session
+
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -39,6 +42,8 @@ flags.DEFINE_string('master', '', 'BNS name of the tensorflow server')
 flags.DEFINE_string('eval_logdir', None, 'Where to write the event logs.')
 
 flags.DEFINE_string('checkpoint_dir', None, 'Directory of model checkpoints.')
+
+flags.DEFINE_string('checkpoint_filename', None, 'name of the checkpoint file to be evaluate.')
 
 # Settings for evaluating the model.
 
@@ -101,13 +106,17 @@ def main(unused_argv):
       resize_factor=FLAGS.resize_factor,
       model_variant=FLAGS.model_variant,
       num_readers=2,
-      is_training=False,
+      is_training=False,            # 设置不是在training
       should_shuffle=False,
       should_repeat=False)
 
+  #关于eval的保存路径
   tf.gfile.MakeDirs(FLAGS.eval_logdir)
   tf.logging.info('Evaluating on %s set', FLAGS.eval_split)
 
+
+
+  # 图结构开始定义的地方
   with tf.Graph().as_default():
     samples = dataset.get_one_shot_iterator().get_next()
 
@@ -125,6 +134,8 @@ def main(unused_argv):
          3])
     if tuple(FLAGS.eval_scales) == (1.0,):
       tf.logging.info('Performing single-scale test.')
+
+      ### 重点，单尺度计算分割结果image_pyramid ： None
       predictions = model.predict_labels(samples[common.IMAGE], model_options,
                                          image_pyramid=FLAGS.image_pyramid)
     else:
@@ -138,8 +149,10 @@ def main(unused_argv):
           model_options=model_options,
           eval_scales=FLAGS.eval_scales,
           add_flipped_images=FLAGS.add_flipped_images)
+
     predictions = predictions[common.OUTPUT_TYPE]
     predictions = tf.reshape(predictions, shape=[-1])
+
     labels = tf.reshape(samples[common.LABEL], shape=[-1])
     weights = tf.to_float(tf.not_equal(labels, dataset.ignore_label))
 
@@ -161,11 +174,14 @@ def main(unused_argv):
     metric_map['eval/%s_overall' % predictions_tag] = tf.metrics.mean_iou(
         labels=labels, predictions=predictions, num_classes=num_classes,
         weights=weights)
+
     # IoU for each class.
+
     one_hot_predictions = tf.one_hot(predictions, num_classes)
     one_hot_predictions = tf.reshape(one_hot_predictions, [-1, num_classes])
     one_hot_labels = tf.one_hot(labels, num_classes)
     one_hot_labels = tf.reshape(one_hot_labels, [-1, num_classes])
+
     for c in range(num_classes):
       predictions_tag_c = '%s_class_%d' % (predictions_tag, c)
       tp, tp_op = tf.metrics.true_positives(
@@ -178,13 +194,13 @@ def main(unused_argv):
           labels=one_hot_labels[:, c], predictions=one_hot_predictions[:, c],
           weights=weights)
       tp_fp_fn_op = tf.group(tp_op, fp_op, fn_op)
+
       iou = tf.where(tf.greater(tp + fn, 0.0),
                      tp / (tp + fn + fp),
                      tf.constant(np.NaN))
       metric_map['eval/%s' % predictions_tag_c] = (iou, tp_fp_fn_op)
 
-    (metrics_to_values,
-     metrics_to_updates) = contrib_metrics.aggregate_metric_map(metric_map)
+    (metrics_to_values, metrics_to_updates) = contrib_metrics.aggregate_metric_map(metric_map)
 
     summary_ops = []
     for metric_name, metric_value in six.iteritems(metrics_to_values):
@@ -192,35 +208,49 @@ def main(unused_argv):
       op = tf.Print(op, [metric_value], metric_name)
       summary_ops.append(op)
 
+    confusion_matrix = tf.get_default_graph().get_tensor_by_name('mean_iou/total_confusion_matrix:0')
+    print(confusion_matrix)
+    cm_op = tf.summary.text("Confusion matrix", tf.dtypes.as_string(confusion_matrix, precision=4))
+    summary_ops.append(cm_op)
+
+#    predictions_softmax = tf.get_default_graph().get_tensor_by_name('Softmax:0')
+#    predictions_softmax = tf.squeeze(predictions_softmax)
+    # softmax_op = tf.summary.text("softmax", tf.dtypes.as_string(predictions_softmax[:, :, 0]))
+    # summary_ops.append(softmax_op)
+
     summary_op = tf.summary.merge(summary_ops)
+
     summary_hook = contrib_training.SummaryAtEndHook(
         log_dir=FLAGS.eval_logdir, summary_op=summary_op)
-    hooks = [summary_hook]
 
-    num_eval_iters = None
-    if FLAGS.max_number_of_evaluations > 0:
-      num_eval_iters = FLAGS.max_number_of_evaluations
+    hooks = [summary_hook]
 
     if FLAGS.quantize_delay_step >= 0:
       contrib_quantize.create_eval_graph()
 
-    contrib_tfprof.model_analyzer.print_model_analysis(
-        tf.get_default_graph(),
-        tfprof_options=contrib_tfprof.model_analyzer
-        .TRAINABLE_VARS_PARAMS_STAT_OPTIONS)
-    contrib_tfprof.model_analyzer.print_model_analysis(
-        tf.get_default_graph(),
-        tfprof_options=contrib_tfprof.model_analyzer.FLOAT_OPS_OPTIONS)
-    contrib_training.evaluate_repeatedly(
-        checkpoint_dir=FLAGS.checkpoint_dir,
-        master=FLAGS.master,
-        eval_ops=list(metrics_to_updates.values()),
-        max_number_of_evaluations=num_eval_iters,
-        hooks=hooks,
-        eval_interval_secs=FLAGS.eval_interval_secs)
+    eval_ops = list(metrics_to_updates.values())
 
+    if FLAGS.checkpoint_filename is not None:
+      checkpoint_filename_with_path = os.path.join(FLAGS.checkpoint_dir, FLAGS.checkpoint_filename)
+      session_creator = monitored_session.ChiefSessionCreator(
+          checkpoint_filename_with_path=checkpoint_filename_with_path)
+      with monitored_session.MonitoredSession(session_creator=session_creator, hooks=hooks) as session:
+        if eval_ops is not None:
+            while not session.should_stop():
+                session.run(eval_ops)
+    else:
+      states = tf.train.get_checkpoint_state(FLAGS.checkpoint_dir)
+      checkpoint_paths = states.all_model_checkpoint_paths
+      print(checkpoint_paths)
+      for checkpoint_path in checkpoint_paths:
+        session_creator = monitored_session.ChiefSessionCreator(checkpoint_filename_with_path=checkpoint_path)
+        with monitored_session.MonitoredSession(session_creator=session_creator, hooks=hooks) as session:
+            if eval_ops is not None:
+                while not session.should_stop():
+                    session.run(eval_ops)
 
 if __name__ == '__main__':
+
   flags.mark_flag_as_required('checkpoint_dir')
   flags.mark_flag_as_required('eval_logdir')
   flags.mark_flag_as_required('dataset_dir')

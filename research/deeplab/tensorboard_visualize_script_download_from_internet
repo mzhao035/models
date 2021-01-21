@@ -1,0 +1,25 @@
+import tensorflow as tf
+from tensorflow.python.platform import gfile
+
+# 这是从二进制格式的pb文件加载模型
+graph = tf.get_default_graph()
+graphdef = graph.as_graph_def()
+graphdef.ParseFromString(gfile.FastGFile("/home/zhaomin/anaconda3/envs/tf_1.15_py_3.6/lib/python3.6/site-packages/tensorflow_core/models/research/deeplab/datasets/trifo_shoe_79_val_9/init_models/deeplabv3_mnv2_ade20k_train/frozen_inference_graph.pb", "rb").read())
+_ = tf.import_graph_def(graphdef, name="")
+
+
+
+#这是从文件格式的meta文件加载模型
+
+#_ = tf.train.import_meta_graph("model.ckpt.meta")
+
+
+
+summary_write = tf.summary.FileWriter("/home/zhaomin/anaconda3/envs/tf_1.15_py_3.6/lib/python3.6/site-packages/tensorflow_core/models/research/deeplab/datasets/trifo_shoe_79_val_9/init_models/deeplabv3_mnv2_ade20k_train/tensorboard_vis" , graph)
+
+
+
+#然后再启动tensorboard：
+
+tensorboard --logdir /home/zhaomin/anaconda3/envs/tf_1.15_py_3.6/lib/python3.6/site-packages/tensorflow_core/models/research/deeplab/datasets/trifo_shoe_79_val_9/init_models/deeplabv3_mnv2_ade20k_train/tensorboard_vis
+

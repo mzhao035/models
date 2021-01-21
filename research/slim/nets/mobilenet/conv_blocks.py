@@ -313,6 +313,7 @@ def expanded_conv(input_tensor,
         raise TypeError('`use_explicit_padding` should only be used with '
                         '"SAME" padding.')
       padding = 'VALID'
+    #将slim.separable_conv2d函数以及后面的一系列参数简化成depthwise_func形式，后面如果调用depthwise_func就是调用slim.separable_conv2d以及这一系列的参数。但是需要注意的是num_outputs=None，所以这个函数会跳过后面的pointwise卷积
     depthwise_func = functools.partial(
         depthwise_fn,
         num_outputs=None,
@@ -341,7 +342,10 @@ def expanded_conv(input_tensor,
     else:
       inner_size = expansion_size
 
+    #inner_size是expansion的尺寸，是前面用6与输入的channel相乘得到的，所以下面这个判断条件成立，split_conv函数就是做expansion
     if inner_size > net.shape[3]:
+      #在split_conv中的实现其实就是调用了conv2d进行channel扩张
+      #return slim.conv2d(input_tensor, num_outputs, [1, 1], scope=scope, **kwargs)
       if expansion_fn == split_conv:
         expansion_fn = functools.partial(
             expansion_fn,
@@ -356,7 +360,7 @@ def expanded_conv(input_tensor,
       net = tf.identity(net, 'expansion_output')
       if endpoints is not None:
         endpoints['expansion_output'] = net
-
+    #channel扩张之后调用slim.separable_conv2d
     if depthwise_location == 'expansion':
       if use_explicit_padding:
         net = _fixed_padding(net, kernel_size, rate)
@@ -369,6 +373,7 @@ def expanded_conv(input_tensor,
       net = expansion_transform(expansion_tensor=net, input_tensor=input_tensor)
     # Note in contrast with expansion, we always have
     # projection to produce the desired output size.
+    #因为前面slim.separable_conv2d跳过了pointwise的卷积，所以这里再进行一次卷积将channel运算成期待的output channel，我想把本来separable_conv2d可以一步完成的操作分成两步是因为channel缩减后要不能进行非线性激活。project_activation_fn=tf.identity，表示确实如论文中提出的使用的是线性激活函数。因为激活函数都是在先进行卷积运算后再运算激活函数，当卷积运算后channel已经比较窄了，所以激活函数用线性激活。
     if projection_fn == split_conv:
       projection_fn = functools.partial(
           projection_fn,
@@ -390,7 +395,8 @@ def expanded_conv(input_tensor,
       net = tf.identity(net, name='depthwise_output')
       if endpoints is not None:
         endpoints['depthwise_output'] = net
-
+    # 最后如果residual为true就进行tensor的相加
+    # 如果residual为true就是Inverted residual block，如果为false就是Bottleneck with expansion layer
     if callable(residual):  # custom residual
       net = residual(input_tensor=input_tensor, output_tensor=net)
     elif (residual and

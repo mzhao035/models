@@ -45,8 +45,9 @@ def _mobilenet_v2(net,
                   reuse=None,
                   scope=None,
                   final_endpoint=None):
+      
   """Auxiliary function to add support for 'reuse' to mobilenet_v2.
-
+  # 辅助函数，用来添加对mobilenet_v2的reuse支持？？？？
   Args:
     net: Input tensor of shape [batch_size, height, width, channels].
     depth_multiplier: Float multiplier for the depth (number of channels)
@@ -535,7 +536,7 @@ def extract_features(images,
     divisible_by: None (use default setting) or an integer that ensures all
       layers # channels will be divisible by this number. Used in MobileNet.
     final_endpoint: The MobileNet endpoint to construct the network up to.
-    model_variant: Model variant for feature extraction.
+    model_variant: Model variant for feature extraction.                                                  #model_variant
     weight_decay: The weight decay for model variables.
     reuse: Reuse the model variables or not.
     is_training: Is training or not.
@@ -672,7 +673,7 @@ def get_network(network_name, preprocess_images,
     preprocess_function = _PREPROCESS_FN[network_name]
   else:
     preprocess_function = _identity_function
-  func = networks_map[network_name]
+  func = networks_map[network_name]    #获得了_mobilenet_v2函数的名称   'mobilenet_v2': _mobilenet_v2
   @functools.wraps(func)
   def network_fn(inputs, *args, **kwargs):
     with slim.arg_scope(arg_scope):

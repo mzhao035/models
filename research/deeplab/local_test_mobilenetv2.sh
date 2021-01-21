@@ -37,12 +37,12 @@ CURRENT_DIR=$(pwd)
 WORK_DIR="${CURRENT_DIR}/deeplab"
 
 # Run model_test first to make sure the PYTHONPATH is correctly set.
-python "${WORK_DIR}"/model_test.py -v
+#python "${WORK_DIR}"/model_test.py
 
 # Go to datasets folder and download PASCAL VOC 2012 segmentation dataset.
 DATASET_DIR="datasets"
 cd "${WORK_DIR}/${DATASET_DIR}"
-sh download_and_convert_voc2012.sh
+#sh download_and_convert_voc2012.sh
 
 # Go back to original directory.
 cd "${CURRENT_DIR}"
@@ -66,8 +66,8 @@ TF_INIT_ROOT="http://download.tensorflow.org/models"
 CKPT_NAME="deeplabv3_mnv2_pascal_train_aug"
 TF_INIT_CKPT="${CKPT_NAME}_2018_01_29.tar.gz"
 cd "${INIT_FOLDER}"
-wget -nd -c "${TF_INIT_ROOT}/${TF_INIT_CKPT}"
-tar -xf "${TF_INIT_CKPT}"
+#wget -nd -c "${TF_INIT_ROOT}/${TF_INIT_CKPT}"
+#tar -xf "${TF_INIT_CKPT}"
 cd "${CURRENT_DIR}"
 
 PASCAL_DATASET="${WORK_DIR}/${DATASET_DIR}/${PASCAL_FOLDER}/tfrecord"
@@ -80,7 +80,7 @@ python "${WORK_DIR}"/train.py \
   --model_variant="mobilenet_v2" \
   --output_stride=16 \
   --train_crop_size="513,513" \
-  --train_batch_size=4 \
+  --train_batch_size=2 \
   --training_number_of_steps="${NUM_ITERATIONS}" \
   --fine_tune_batch_norm=true \
   --tf_initial_checkpoint="${INIT_FOLDER}/${CKPT_NAME}/model.ckpt-30000" \
@@ -90,40 +90,40 @@ python "${WORK_DIR}"/train.py \
 # Run evaluation. This performs eval over the full val split (1449 images) and
 # will take a while.
 # Using the provided checkpoint, one should expect mIOU=75.34%.
-python "${WORK_DIR}"/eval.py \
-  --logtostderr \
-  --eval_split="val" \
-  --model_variant="mobilenet_v2" \
-  --eval_crop_size="513,513" \
-  --checkpoint_dir="${TRAIN_LOGDIR}" \
-  --eval_logdir="${EVAL_LOGDIR}" \
-  --dataset_dir="${PASCAL_DATASET}" \
-  --max_number_of_evaluations=1
+#python "${WORK_DIR}"/eval.py \
+#  --logtostderr \
+#  --eval_split="val" \
+#  --model_variant="mobilenet_v2" \
+#  --eval_crop_size="513,513" \
+#  --checkpoint_dir="${TRAIN_LOGDIR}" \
+#  --eval_logdir="${EVAL_LOGDIR}" \
+#  --dataset_dir="${PASCAL_DATASET}" \
+#  --max_number_of_evaluations=1
 
 # Visualize the results.
-python "${WORK_DIR}"/vis.py \
-  --logtostderr \
-  --vis_split="val" \
-  --model_variant="mobilenet_v2" \
-  --vis_crop_size="513,513" \
-  --checkpoint_dir="${TRAIN_LOGDIR}" \
-  --vis_logdir="${VIS_LOGDIR}" \
-  --dataset_dir="${PASCAL_DATASET}" \
-  --max_number_of_iterations=1
+#python "${WORK_DIR}"/vis.py \
+#  --logtostderr \
+#  --vis_split="val" \
+#  --model_variant="mobilenet_v2" \
+#  --vis_crop_size="513,513" \
+#  --checkpoint_dir="${TRAIN_LOGDIR}" \
+#  --vis_logdir="${VIS_LOGDIR}" \
+#  --dataset_dir="${PASCAL_DATASET}" \
+#  --max_number_of_iterations=1
 
 # Export the trained checkpoint.
-CKPT_PATH="${TRAIN_LOGDIR}/model.ckpt-${NUM_ITERATIONS}"
-EXPORT_PATH="${EXPORT_DIR}/frozen_inference_graph.pb"
+#CKPT_PATH="${TRAIN_LOGDIR}/model.ckpt-${NUM_ITERATIONS}"
+#EXPORT_PATH="${EXPORT_DIR}/frozen_inference_graph.pb"
 
-python "${WORK_DIR}"/export_model.py \
-  --logtostderr \
-  --checkpoint_path="${CKPT_PATH}" \
-  --export_path="${EXPORT_PATH}" \
-  --model_variant="mobilenet_v2" \
-  --num_classes=21 \
-  --crop_size=513 \
-  --crop_size=513 \
-  --inference_scales=1.0
+#python "${WORK_DIR} "/export_model.py \
+#  --logtostderr \
+#  --checkpoint_path="${CKPT_PATH}" \
+#  --export_path="${EXPORT_PATH}" \
+#  --model_variant="mobilenet_v2" \
+#  --num_classes=21 \
+#  --crop_size=513 \
+#  --crop_size=513 \
+#  --inference_scales=1.0
 
 # Run inference with the exported checkpoint.
 # Please refer to the provided deeplab_demo.ipynb for an example.

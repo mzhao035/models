@@ -65,6 +65,8 @@ flags.DEFINE_list(
     'image_pooling_stride', '1,1',
     'Image pooling stride [height, width] used in the ASPP image pooling. ')
 
+
+####
 flags.DEFINE_boolean('aspp_with_batch_norm', True,
                      'Use batch norm parameters for ASPP or not.')
 
@@ -76,6 +78,8 @@ flags.DEFINE_boolean('aspp_with_separable_conv', True,
 flags.DEFINE_multi_integer('multi_grid', None,
                            'Employ a hierarchy of atrous rates for ResNet.')
 
+
+# 默认深度乘数是1.0
 flags.DEFINE_float('depth_multiplier', 1.0,
                    'Multiplier for the depth (number of channels) for all '
                    'convolution ops used in MobileNet.')
@@ -137,11 +141,8 @@ flags.DEFINE_boolean('decoder_use_sum_merge', False,
 
 flags.DEFINE_integer('decoder_filters', 256, 'Decoder filters.')
 
-flags.DEFINE_boolean('decoder_output_is_logits', False,
-                     'Use decoder output as logits or not.')
-
+flags.DEFINE_boolean('decoder_output_is_logits', False, '')
 flags.DEFINE_boolean('image_se_uses_qsigmoid', False, 'Use q-sigmoid.')
-
 flags.DEFINE_multi_float(
     'label_weights', None,
     'A list of label weights, each element represents the weight for the label '
@@ -230,10 +231,14 @@ class ModelOptions(
     Returns:
       A new ModelOptions instance.
     """
+
+    # 参数1
     dense_prediction_cell_config = None
     if FLAGS.dense_prediction_cell_json:
       with tf.gfile.Open(FLAGS.dense_prediction_cell_json, 'r') as f:
         dense_prediction_cell_config = json.load(f)
+
+    #参数2
     decoder_output_stride = None
     if FLAGS.decoder_output_stride:
       decoder_output_stride = [
@@ -241,15 +246,27 @@ class ModelOptions(
       if sorted(decoder_output_stride, reverse=True) != decoder_output_stride:
         raise ValueError('Decoder output stride need to be sorted in the '
                          'descending order.')
-    image_pooling_crop_size = None
+
+    #参数3
+    image_pooling_crop_size = None   ###
     if FLAGS.image_pooling_crop_size:
       image_pooling_crop_size = [int(x) for x in FLAGS.image_pooling_crop_size]
-    image_pooling_stride = [1, 1]
+
+    ##参数4
+    image_pooling_stride = [1, 1]  ###
     if FLAGS.image_pooling_stride:
       image_pooling_stride = [int(x) for x in FLAGS.image_pooling_stride]
+
+    # 参数5
+    # None to 1.0
     label_weights = FLAGS.label_weights
     if label_weights is None:
       label_weights = 1.0
+
+        
+
+
+    # 参数6
     nas_architecture_options = {
         'nas_stem_output_num_conv_filters': (
             FLAGS.nas_stem_output_num_conv_filters),
@@ -261,12 +278,12 @@ class ModelOptions(
         preprocessed_images_dtype,
         FLAGS.merge_method,
         FLAGS.add_image_level_feature,
-        image_pooling_crop_size,
-        image_pooling_stride,
-        FLAGS.aspp_with_batch_norm,
+        image_pooling_crop_size,   #None
+        image_pooling_stride,      #1,1
+        FLAGS.aspp_with_batch_norm,   # True
         FLAGS.aspp_with_separable_conv,
         FLAGS.multi_grid,
-        decoder_output_stride,
+        decoder_output_stride,         #None
         FLAGS.decoder_use_separable_conv,
         FLAGS.logits_kernel_size,
         FLAGS.model_variant,
@@ -274,17 +291,17 @@ class ModelOptions(
         FLAGS.divisible_by,
         FLAGS.prediction_with_upsampled_logits,
         dense_prediction_cell_config,
-        nas_architecture_options,
+        nas_architecture_options,     #
         FLAGS.use_bounded_activation,
         FLAGS.aspp_with_concat_projection,
         FLAGS.aspp_with_squeeze_and_excitation,
         FLAGS.aspp_convs_filters,
         FLAGS.decoder_use_sum_merge,
         FLAGS.decoder_filters,
-        FLAGS.decoder_output_is_logits,
+        FLAGS.decoder_output_is_logits,   #false
         FLAGS.image_se_uses_qsigmoid,
-        label_weights,
-        'None',
+        label_weights,               # 1.0
+        'None',                      #'sync_batch_norm_method',
         FLAGS.batch_norm_decay)
 
   def __deepcopy__(self, memo):

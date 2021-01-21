@@ -63,10 +63,10 @@ flags.DEFINE_string('train_logdir', None,
 flags.DEFINE_integer('log_steps', 10,
                      'Display logging information at every log_steps.')
 
-flags.DEFINE_integer('save_interval_secs', 1200,
+flags.DEFINE_integer('save_interval_secs', 300,
                      'How often, in seconds, we save the model to disk.')
 
-flags.DEFINE_integer('save_summaries_secs', 600,
+flags.DEFINE_integer('save_summaries_secs', 300,
                      'How often, in seconds, we compute the summaries.')
 
 flags.DEFINE_boolean(
@@ -135,7 +135,7 @@ flags.DEFINE_list('train_crop_size', '513,513',
                   'Image crop size [height, width] during training.')
 
 flags.DEFINE_float(
-    'last_layer_gradient_multiplier', 1.0,
+    'last_layer_gradient_multiplier', 10.0,
     'The gradient multiplier for last layers, which is used to '
     'boost the gradient of last layers if the value > 1.')
 
@@ -154,10 +154,10 @@ flags.DEFINE_string('tf_initial_checkpoint', None,
                     'The initial checkpoint in tensorflow format.')
 
 # Set to False if one does not want to re-use the trained classifier weights.
-flags.DEFINE_boolean('initialize_last_layer', True,
+flags.DEFINE_boolean('initialize_last_layer', False,
                      'Initialize the last layer.')
 
-flags.DEFINE_boolean('last_layers_contain_logits_only', False,
+flags.DEFINE_boolean('last_layers_contain_logits_only', True,
                      'Only consider logits as last layers or not.')
 
 flags.DEFINE_integer('slow_start_step', 0,
@@ -172,7 +172,7 @@ flags.DEFINE_boolean('fine_tune_batch_norm', True,
                      'Fine tune the batch norm parameters or not.')
 
 flags.DEFINE_float('min_scale_factor', 0.5,
-                   'Mininum scale factor for data augmentation.')
+                   'Mininum scale factor for data augmentation.')                                   ## 图像预处理   scale
 
 flags.DEFINE_float('max_scale_factor', 2.,
                    'Maximum scale factor for data augmentation.')
@@ -217,61 +217,62 @@ flags.DEFINE_string('train_split', 'train',
 
 flags.DEFINE_string('dataset_dir', None, 'Where the dataset reside.')
 
+print(FLAGS.min_resize_value)
+
 
 def _build_deeplab(iterator, outputs_to_num_classes, ignore_label):
-  """Builds a clone of DeepLab.
+    """Builds a clone of DeepLab.
 
-  Args:
-    iterator: An iterator of type tf.data.Iterator for images and labels.
-    outputs_to_num_classes: A map from output type to the number of classes. For
-      example, for the task of semantic segmentation with 21 semantic classes,
-      we would have outputs_to_num_classes['semantic'] = 21.
-    ignore_label: Ignore label.
-  """
-  samples = iterator.get_next()
+    Args:
+      iterator: An iterator of type tf.data.Iterator for images and labels.
+      outputs_to_num_classes: A map from output type to the number of classes. For
+        example, for the task of semantic segmentation with 21 semantic classes,
+        we would have outputs_to_num_classes['semantic'] = 21.
+      ignore_label: Ignore label.
+      :type iterator: object
+    """
 
-  # Add name to input and label nodes so we can add to summary.
-  samples[common.IMAGE] = tf.identity(samples[common.IMAGE], name=common.IMAGE)
-  samples[common.LABEL] = tf.identity(samples[common.LABEL], name=common.LABEL)
+    samples = iterator.get_next()
+    samples[common.IMAGE] = tf.identity(samples[common.IMAGE], name=common.IMAGE)
+    samples[common.LABEL] = tf.identity(samples[common.LABEL], nclame=common.LABEL)
 
-  model_options = common.ModelOptions(
+    model_options = common.ModelOptions(
       outputs_to_num_classes=outputs_to_num_classes,
       crop_size=[int(sz) for sz in FLAGS.train_crop_size],
-      atrous_rates=FLAGS.atrous_rates,
-      output_stride=FLAGS.output_stride)
+      atrous_rates=FLAGS.atrous_rates,   # for mobilentv2 None
+      output_stride=FLAGS.output_stride)  # for mobilenetv2 16
 
-  outputs_to_scales_to_logits = model.multi_scale_logits(
+    outputs_to_scales_to_logits = model.multi_scale_logits(
       samples[common.IMAGE],
       model_options=model_options,
-      image_pyramid=FLAGS.image_pyramid,
+      image_pyramid=FLAGS.image_pyramid,  #None, 'Input scales for multi-scale feature extraction.'
       weight_decay=FLAGS.weight_decay,
       is_training=True,
-      fine_tune_batch_norm=FLAGS.fine_tune_batch_norm,
+      fine_tune_batch_norm=FLAGS.fine_tune_batch_norm,   #false，我们可以自己设置
       nas_training_hyper_parameters={
-          'drop_path_keep_prob': FLAGS.drop_path_keep_prob,
-          'total_training_steps': FLAGS.training_number_of_steps,
+          'drop_path_keep_prob': FLAGS.drop_path_keep_prob,   #1
+          'total_training_steps': FLAGS.training_number_of_steps,  #30000
       })
 
-  # Add name to graph node so we can add to summary.
-  output_type_dict = outputs_to_scales_to_logits[common.OUTPUT_TYPE]
-  output_type_dict[model.MERGED_LOGITS_SCOPE] = tf.identity(
-      output_type_dict[model.MERGED_LOGITS_SCOPE], name=common.OUTPUT_TYPE)
+    # Add name to graph node so we can add to summary.
+    output_type_dict = outputs_to_scales_to_logits[common.OUTPUT_TYPE]
+    output_type_dict[model.MERGED_LOGITS_SCOPE] = tf.identity(output_type_dict[model.MERGED_LOGITS_SCOPE], name=common.OUTPUT_TYPE)
 
-  for output, num_classes in six.iteritems(outputs_to_num_classes):
-    train_utils.add_softmax_cross_entropy_loss_for_each_scale(
-        outputs_to_scales_to_logits[output],
-        samples[common.LABEL],
-        num_classes,
-        ignore_label,
-        loss_weight=model_options.label_weights,
-        upsample_logits=FLAGS.upsample_logits,
-        hard_example_mining_step=FLAGS.hard_example_mining_step,
-        top_k_percent_pixels=FLAGS.top_k_percent_pixels,
-        scope=output)
+    for output, num_classes in six.iteritems(outputs_to_num_classes):
+        train_utils.add_softmax_cross_entropy_loss_for_each_scale(
+            outputs_to_scales_to_logits[output],
+            samples[common.LABEL],
+            num_classes,
+            ignore_label,
+            loss_weight=model_options.label_weights,
+            upsample_logits=FLAGS.upsample_logits,  #true
+            hard_example_mining_step=FLAGS.hard_example_mining_step,
+            top_k_percent_pixels=FLAGS.top_k_percent_pixels,
+            scope=output)
 
 
 def main(unused_argv):
-  tf.logging.set_verbosity(tf.logging.INFO)
+  tf.logging.set_verbosity(tf.logging.INFO)                                                        #verbosity	冗长；赘述
   # Set up deployment (i.e., multi-GPUs and/or multi-replicas).
   config = model_deploy.DeploymentConfig(
       num_clones=FLAGS.num_clones,
@@ -291,6 +292,10 @@ def main(unused_argv):
 
   with tf.Graph().as_default() as graph:
     with tf.device(config.inputs_device()):
+      tf.logging.info('\nconfig.inputs_device\n')
+      print(config.inputs_device())
+      #inputs_device()
+      #数据预处理
       dataset = data_generator.Dataset(
           dataset_name=FLAGS.dataset,
           split_name=FLAGS.train_split,
@@ -300,35 +305,49 @@ def main(unused_argv):
           min_resize_value=FLAGS.min_resize_value,
           max_resize_value=FLAGS.max_resize_value,
           resize_factor=FLAGS.resize_factor,
-          min_scale_factor=FLAGS.min_scale_factor,
-          max_scale_factor=FLAGS.max_scale_factor,
+          min_scale_factor=FLAGS.min_scale_factor,   #training 独有
+          max_scale_factor=FLAGS.max_scale_factor,   #training 独有
           scale_factor_step_size=FLAGS.scale_factor_step_size,
           model_variant=FLAGS.model_variant,
           num_readers=4,
-          is_training=True,
+          is_training=True,     #默认istraining 是 true
           should_shuffle=True,
           should_repeat=True)
 
-    # Create the global step on the device storing the variables.
+    #Create the global step on the device storing the variables.
     with tf.device(config.variables_device()):
+      tf.logging.info('\nconfig.variables_device\n')
+      print(config.variables_device())
       global_step = tf.train.get_or_create_global_step()
-
-      # Define the model and create clones.
+      tf.logging.info('\nglobal_step:\n')
+      print(global_step)
+      # Define the model and create clones.                                                                      #定义模型
       model_fn = _build_deeplab
+      tf.logging.info('\nmodel_fn:\n')
+      print(model_fn)
+      # 模型参数
       model_args = (dataset.get_one_shot_iterator(), {
-          common.OUTPUT_TYPE: dataset.num_of_classes
+          common.OUTPUT_TYPE: dataset.num_of_classes    # OUTPUT_TYPE = 'semantic'   71
       }, dataset.ignore_label)
+      print(model_args)
+
       clones = model_deploy.create_clones(config, model_fn, args=model_args)
+      print(clones)
+
 
       # Gather update_ops from the first clone. These contain, for example,
       # the updates for the batch_norm variables created by model_fn.
       first_clone_scope = config.clone_scope(0)
+      print(first_clone_scope)
       update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS, first_clone_scope)
-
+      print(update_ops)
     # Gather initial summaries.
     summaries = set(tf.get_collection(tf.GraphKeys.SUMMARIES))
-
+    tf.logging.info('\nsummaries:\n')
+    print(summaries)
     # Add summaries for model variables.
+
+    # print(tf.model_variables())
     for model_var in tf.model_variables():
       summaries.add(tf.summary.histogram(model_var.op.name, model_var))
 
@@ -357,10 +376,14 @@ def main(unused_argv):
               'samples/%s' % common.OUTPUT_TYPE, summary_predictions))
 
     # Add summaries for losses.
+    print(tf.get_collection(tf.GraphKeys.LOSSES, first_clone_scope))
+    second_clone_scope = config.clone_scope(1)
+    print(tf.get_collection(tf.GraphKeys.LOSSES, second_clone_scope))
     for loss in tf.get_collection(tf.GraphKeys.LOSSES, first_clone_scope):
       summaries.add(tf.summary.scalar('losses/%s' % loss.op.name, loss))
 
     # Build the optimizer based on the device specification.
+    print(config.optimizer_device())
     with tf.device(config.optimizer_device()):
       learning_rate = train_utils.get_model_learning_rate(
           FLAGS.learning_policy,
@@ -395,17 +418,22 @@ def main(unused_argv):
     with tf.device(config.variables_device()):
       total_loss, grads_and_vars = model_deploy.optimize_clones(
           clones, optimizer)
+      print(total_loss)
+      # print(grads_and_vars)
       total_loss = tf.check_numerics(total_loss, 'Loss is inf or nan.')
       summaries.add(tf.summary.scalar('total_loss', total_loss))
 
       # Modify the gradients for biases and last layer variables.
       last_layers = model.get_extra_layer_scopes(
           FLAGS.last_layers_contain_logits_only)
+      print(last_layers)
       grad_mult = train_utils.get_model_gradient_multipliers(
           last_layers, FLAGS.last_layer_gradient_multiplier)
+      print(grad_mult)
       if grad_mult:
         grads_and_vars = slim.learning.multiply_gradients(
             grads_and_vars, grad_mult)
+        # print(grads_and_vars)
 
       # Create gradient update op.
       grad_updates = optimizer.apply_gradients(
@@ -419,7 +447,7 @@ def main(unused_argv):
     # created by model_fn and either optimize_clones() or _gather_clone_loss().
     summaries |= set(
         tf.get_collection(tf.GraphKeys.SUMMARIES, first_clone_scope))
-
+    # print(summaries)
     # Merge all summaries together.
     summary_op = tf.summary.merge(list(summaries))
 
@@ -435,6 +463,7 @@ def main(unused_argv):
     with contrib_tfprof.ProfileContext(
         enabled=profile_dir is not None, profile_dir=profile_dir):
       init_fn = None
+      #获取checkpoint，从checkpoint开始训练
       if FLAGS.tf_initial_checkpoint:
         init_fn = train_utils.get_model_init_fn(
             FLAGS.train_logdir,
