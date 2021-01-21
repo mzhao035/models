@@ -234,7 +234,7 @@ def _build_deeplab(iterator, outputs_to_num_classes, ignore_label):
 
     samples = iterator.get_next()
     samples[common.IMAGE] = tf.identity(samples[common.IMAGE], name=common.IMAGE)
-    samples[common.LABEL] = tf.identity(samples[common.LABEL], nclame=common.LABEL)
+    samples[common.LABEL] = tf.identity(samples[common.LABEL], name=common.LABEL)
 
     model_options = common.ModelOptions(
       outputs_to_num_classes=outputs_to_num_classes,
